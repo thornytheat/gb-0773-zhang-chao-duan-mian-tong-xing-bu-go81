@@ -1,1 +1,49 @@
-<div class="grid"><section class="panel"><h2>潮窗验签</h2><p class="balance">原件与结果摘要一致</p><p class="hash">{{ seal }}</p><a class="download" href="{{ url_for('api.download', key=key) }}">下载潮窗证据</a></section><section class="panel"><h2>签发清单</h2><ul><li>潮尺、站点、船期原件</li><li>隔离原因与读数来源</li><li>交点、候潮区间及覆盖账</li></ul><p>调度复核 __________________</p></section></div>
+<div class="grid">
+<section class="panel">
+<h2>潮窗验签 · 放行凭据</h2>
+{% if block %}
+<p class="balance">{{ block.message }}</p>
+<p class="hash" title="{{ block.code }}">{{ block.code }}</p>
+{% elif permit %}
+<p class="balance">原件与结果摘要一致，可签发</p>
+<p class="hash">{{ permit.seal_sha256 }}</p>
+<dl>
+<dt>船期</dt><dd>{{ permit.vessel }} · 放行水深 {{ permit.order.threshold_m }} m</dd>
+<dt>取舍</dt><dd>{{ policies[permit.policy] }}</dd>
+<dt>凭据号</dt><dd class="hash">{{ permit.permit_id }}</dd>
+<dt>所用运行簿</dt><dd class="hash">{{ permit.run.run_id }}</dd>
+</dl>
+<p>{{ permit.decision.statement }}</p>
+<div class="scroll"><table>
+<thead><tr><th>放行潮窗</th><th>含端点</th><th>秒</th></tr></thead>
+<tbody>{% for row in permit.windows %}<tr><td>{{ time(row.start) }} — {{ time(row.end) }}</td><td>{{ '[' if row.start_included else '(' }} {{ ']' if row.end_included else ')' }}</td><td>{{ row.seconds }}</td></tr>{% else %}<tr><td colspan="3">无已核清潮窗。</td></tr>{% endfor %}</tbody>
+</table></div>
+{% if permit.withheld.unknown %}<p class="balance">以下缺证时段不写入凭据、不按可行放行：</p>
+<ul>{% for row in permit.withheld.unknown %}<li>{{ time(row.start) }} — {{ time(row.end) }} · {{ row.seconds }} s · {{ row.codes|join('、') }}</li>{% endfor %}</ul>{% endif %}
+{% if permit.withheld.blocked %}<p>不可行时段 {{ permit.withheld.blocked|length }} 段，不计入放行。</p>{% endif %}
+{% if permit.withheld.isolated_points %}<ul>{% for row in permit.withheld.isolated_points %}<li>单点达标 {{ time(row.at) }} · {{ row.sections|join('、') }} · 不考虑为放行区间</li>{% endfor %}</ul>{% endif %}
+{% endif %}
+</section>
+<section class="panel">
+<h2>签发清单</h2>
+<form method="get" id="policy">
+<input type="hidden" name="run" value="{{ key }}"><input type="hidden" name="sample" value="{{ sample }}"><input type="hidden" name="vessel" value="{{ vessel }}">
+<label>本次取舍 <select name="policy" onchange="document.querySelector('#policy').submit()">{% for id, label in policies.items() %}<option value="{{ id }}" {{ 'selected' if id==policy }}>{{ label }}</option>{% endfor %}</select></label>
+</form>
+<p>{{ policy_text[policy] }}</p>
+<dl>
+<dt>所用基准指纹</dt><dd class="hash">{{ permit.datum.fingerprint if permit else '—' }}</dd>
+{% if permit %}{% for section, row in permit.datum.sections.items() %}<dt>{{ section }}</dt><dd class="hash" title="{{ row.fingerprint }}">版本 {{ row.seq or '未登记' }} · {{ row.fingerprint[:16] }}</dd>{% endfor %}{% endif %}
+</dl>
+{% if permit %}
+<div id="signoff">
+<button type="button" class="sign" data-run="{{ key }}" data-vessel="{{ vessel }}" data-policy="{{ policy }}">签发本班凭据</button>
+<p class="hash" id="permit-feedback" role="status"></p>
+</div>
+{% endif %}
+<p>潮尺、站点、船期原件 · 隔离原因与读数来源 · 交点、候潮区间及覆盖账</p>
+<p>调度复核 __________________</p>
+</section>
+</div>
+<div class="grid"><section class="panel"><h2>已签凭据</h2><ul id="permit-list">{% for row in permits %}<li><a href="{{ url_for('api.download_permit', permit_id=row.permit_id) }}">{{ row.permit_id[:12] }}</a> · {{ row.permit.vessel }} · {{ row.permit.decision.cleared_s }} s · {{ permit_states[row.status] }}{% if row.code %} · {{ row.message }}{% endif %}</li>{% else %}<li>本簿尚未签发凭据。</li>{% endfor %}</ul></section>
+<section class="panel"><h2>证据追溯</h2><p>凭据钉住运行簿、逐断面基准版本及各潮窗证据；基准更新或补正后，旧凭据转为失效，需按当前资料重算再签。</p><a href="{{ url_for('api.download', key=key) }}">下载全份运行证据</a></section></div>

@@ -1,1 +1,22 @@
-<div class="grid"><section class="panel"><h2>当班原件指纹</h2><dl>{% for name,hash in receipt.inputs.items() %}<dt>{{ name }}</dt><dd class="hash">{{ hash }}</dd>{% endfor %}</dl><button id="rerun" data-run="{{ key }}" type="button">复算本簿</button><output id="feedback" role="status"></output></section><section class="panel"><h2>归档目录</h2><ul>{% for row in history %}<li><a href="{{ url_for('tide_desk.desk', chapter='journal',run=row.run_id) }}">{{ row.run_id[:12] }} · {{ row.started_at }}</a></li>{% endfor %}</ul></section></div>
+<div class="grid">
+<section class="panel"><h2>当班原件指纹</h2><dl>{% for name,hash in receipt.inputs.items() %}<dt>{{ name }}</dt><dd class="hash">{{ hash }}</dd>{% endfor %}</dl>
+{% if permit_state %}<p class="balance">{{ permit_state.message }}</p><p class="hash" title="{{ permit_state.code }}">{{ run_states[permit_state.status] }}</p>{% endif %}
+{% if permit_state and permit_state.affected_routes %}<ul>{% for row in permit_state.affected_routes %}<li>{{ row.vessel }} · {{ row.message }}{% if row.windows %} · 受影响潮窗：{% for start, end in row.windows %}{{ time(start) }} — {{ time(end) }}{% if not loop.last %}、{% endif %}{% endfor %}{% endif %}</li>{% endfor %}</ul>{% endif %}
+{% if permit_state and permit_state.status == 'partial' %}<p>仍可签发的船期照常出凭据；已失效船期须按补正簿或当前基准重算再签。</p>{% endif %}
+<button id="rerun" data-run="{{ key }}" type="button">复算本簿</button><output id="feedback" role="status"></output></section>
+<section class="panel"><h2>补正与追溯</h2>
+<p>补正簿：{{ lineage.parent[:12] if lineage.parent else '无（本簿为首簿）' }}</p>
+<p>已接手补正簿：{% for child in lineage.successors %}{{ child[:12] }}{% if not loop.last %}、{% endif %}{% else %}无{% endfor %}</p>
+{% if permits %}<h3>本簿凭据</h3><ul>{% for row in permits %}<li>{{ row.permit_id[:12] }} · {{ row.permit.vessel }} · {{ permit_states[row.status] }}{% if row.code %} · {{ row.message }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+<details><summary>提交补正资料</summary>
+<form method="post" action="{{ url_for('tide_desk.correct', key=key) }}">
+<label>潮尺 observations.csv<textarea name="observations" rows="6" required></textarea></label>
+<label>站点 stations.csv<textarea name="stations" rows="4" required></textarea></label>
+<label>船期 vessels.csv<textarea name="vessels" rows="4" required></textarea></label>
+<button type="submit">补正归档</button>
+</form>
+<p>补正与旧簿输入相同则直接返回旧簿；同一补正重试沿用原补正簿，不新增留档。两者都可按原号查阅。</p>
+</details>
+</section>
+<section class="panel"><h2>归档目录</h2><ul>{% for row in history %}<li><a href="{{ url_for('tide_desk.desk', chapter='journal', run=row.run_id) }}">{{ row.run_id[:12] }} · {{ row.started_at }}</a></li>{% endfor %}</ul></section>
+</div>
